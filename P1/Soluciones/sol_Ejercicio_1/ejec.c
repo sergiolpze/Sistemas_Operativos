@@ -12,21 +12,47 @@ void parse(int argc, char *argv[]){
         exit(1);
     }
 }
+void manejador_A(int signal){
+    if(fork()==0){
+        // HIJO
+        execlp("pstree","pstree", NULL);
 
-void codigo_X(){
+        exit(0);
+    }
+}
+void manejador_alarmaZ(int sig){}
+
+void codigo_Z(int segundos){
+    printf("Soy el proceso Z mi pid es %d. Mi padre es %d. Mi abuelo es %d. Mi bisabuelo es %d.\n", getpid(), getppid(), pid_A, pid_Padre);
+    
+    signal(SIGALRM, manejador_alarmaZ);
+    alarm(segundos);
+    pause();
+
+    kill(pid_A, SIGUSR1);
+
     wait(NULL);
+
+    printf("Soy Z (%d) y muero\n", getpid());
 }
 
 void codigo_Y(){
+    printf("Soy el proceso Y mi pid es %d. Mi padre es %d. Mi abuelo es %d. Mi bisabuelo es %d.\n", getpid(), getppid(), pid_A, pid_Padre);
     wait(NULL);
+
+    printf("Soy Y (%d) y muero\n", getpid());
 }
 
-void codigo_Z(){
+void codigo_X(){
+    printf("Soy el proceso X mi pid es %d. Mi padre es %d. Mi abuelo es %d. Mi bisabuelo es %d.\n", getpid(), getppid(), pid_A, pid_Padre);
+    wait(NULL);
 
-
+    printf("Soy X (%d) y muero\n", getpid());
 }
 
-void codigo_B(){
+void codigo_B(int segundos){
+    printf("Soy el proceso B mi pid es %d. Mi padre es %d. Mi abuelo es %d.\n", getpid(), pid_A, pid_Padre);
+
     for(int i=0; i<3; i++){
         switch(fork()){
             case -1:
@@ -36,7 +62,7 @@ void codigo_B(){
             case 0:
                 if(i==0) codigo_X();
                 if(i==1) codigo_Y();
-                if(i==2) codigo_Z();
+                if(i==2) codigo_Z(segundos);
                 exit(0);
         }
     }
@@ -46,7 +72,11 @@ void codigo_B(){
     printf("Soy B (%d) y muero.\n", getpid());
 }
 
-void codigo_A(){
+void codigo_A(int segundos){
+    printf("Soy el proceso A: mi pid es %d. Mi padre es %d.\n", getpid(), pid_Padre);
+
+    signal(SIGUSR1, manejador_A);
+
     switch(fork()){
         case -1:
             // ERROR
@@ -55,12 +85,13 @@ void codigo_A(){
             exit(1);
         case 0:
             // HIJO
-            printf("Soy el proceso B mi pid es %d. Mi padre es %d. Mi abuelo es %d.\n", getpid(), pid_A, pid_Padre);
-            codigo_B();
+            codigo_B(segundos);
 
             exit(0);
         default:
             // PADRE
+            pause();
+
             wait(NULL);
             printf("Soy A (%d) y muero\n", getpid());
             break;
@@ -84,9 +115,7 @@ int main(int argc, char *argv[]){
         case 0: 
             // HIJO
             pid_A = getpid();
-
-            printf("Soy el proceso A: mi pid es %d. Mi padre es %d.\n", getpid(), pid_Padre);
-            codigo_A();
+            codigo_A(segundos_alarma);
 
             exit(0);
         default:
