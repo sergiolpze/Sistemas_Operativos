@@ -12,42 +12,55 @@ void parse(int argc, char *argv[]){
         exit(1);
     }
 }
-void manejador_A(int signal){
+
+
+void manejador_alarma(int sig){}
+
+void funcion_pstree(){
     if(fork()==0){
         // HIJO
-        execlp("pstree","pstree", NULL);
+        char strPidP[10];
+        sprintf(strPidP, "%d", pid_Padre);
+        execlp("pstree","pstree","-c", strPidP ,NULL);
 
         exit(0);
     }
 }
-void manejador_alarmaZ(int sig){}
+
+
 
 void codigo_Z(int segundos){
     printf("Soy el proceso Z mi pid es %d. Mi padre es %d. Mi abuelo es %d. Mi bisabuelo es %d.\n", getpid(), getppid(), pid_A, pid_Padre);
     
-    signal(SIGALRM, manejador_alarmaZ);
+    signal(SIGALRM, manejador_alarma);
     alarm(segundos);
     pause();
 
     kill(pid_A, SIGUSR1);
 
-    wait(NULL);
+    signal(SIGUSR1, manejador_alarma);
+    pause();
 
     printf("Soy Z (%d) y muero\n", getpid());
+    exit(0);
 }
 
 void codigo_Y(){
     printf("Soy el proceso Y mi pid es %d. Mi padre es %d. Mi abuelo es %d. Mi bisabuelo es %d.\n", getpid(), getppid(), pid_A, pid_Padre);
-    wait(NULL);
+    signal(SIGUSR1, manejador_alarma);
+    pause();
 
     printf("Soy Y (%d) y muero\n", getpid());
+    exit(0);
 }
 
 void codigo_X(){
     printf("Soy el proceso X mi pid es %d. Mi padre es %d. Mi abuelo es %d. Mi bisabuelo es %d.\n", getpid(), getppid(), pid_A, pid_Padre);
-    wait(NULL);
+    signal(SIGUSR1, manejador_alarma);
+    pause();
 
     printf("Soy X (%d) y muero\n", getpid());
+    exit(0);
 }
 
 void codigo_B(int segundos){
@@ -63,19 +76,21 @@ void codigo_B(int segundos){
                 if(i==0) codigo_X();
                 if(i==1) codigo_Y();
                 if(i==2) codigo_Z(segundos);
-                exit(0);
         }
     }
+
+    signal(SIGUSR1, manejador_alarma);
+
     for(int i=0; i<3; i++){
         wait(NULL);
     }
     printf("Soy B (%d) y muero.\n", getpid());
+
+    exit(0);
 }
 
 void codigo_A(int segundos){
     printf("Soy el proceso A: mi pid es %d. Mi padre es %d.\n", getpid(), pid_Padre);
-
-    signal(SIGUSR1, manejador_A);
 
     switch(fork()){
         case -1:
@@ -87,14 +102,19 @@ void codigo_A(int segundos){
             // HIJO
             codigo_B(segundos);
 
-            exit(0);
         default:
             // PADRE
+            signal(SIGUSR1, manejador_alarma);
             pause();
+
+            funcion_pstree();
+            wait(NULL);
+
+            kill(pid_Padre, SIGUSR1); // Señal que le manda al superpadre
 
             wait(NULL);
             printf("Soy A (%d) y muero\n", getpid());
-            break;
+            exit(0);
     }
 }
 
@@ -117,9 +137,13 @@ int main(int argc, char *argv[]){
             pid_A = getpid();
             codigo_A(segundos_alarma);
 
-            exit(0);
         default:
             // PADRE
+            signal(SIGUSR1, manejador_alarma);
+            pause();
+
+            kill(0,SIGUSR1);
+
             wait(NULL);
 
             printf("Soy ejec (%d) y muero\n", getpid());
