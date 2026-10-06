@@ -14,7 +14,7 @@ void parse(int argc, char *argv[]){
 }
 
 
-void manejador_alarma(int sig){}
+void manejador_despertar(int sig){}
 
 void funcion_pstree(){
     if(fork()==0){
@@ -32,13 +32,13 @@ void funcion_pstree(){
 void codigo_Z(int segundos){
     printf("Soy el proceso Z mi pid es %d. Mi padre es %d. Mi abuelo es %d. Mi bisabuelo es %d.\n", getpid(), getppid(), pid_A, pid_Padre);
     
-    signal(SIGALRM, manejador_alarma);
+    signal(SIGALRM, manejador_despertar);
     alarm(segundos);
     pause();
 
     kill(pid_A, SIGUSR1);
 
-    signal(SIGUSR1, manejador_alarma);
+    signal(SIGUSR1, manejador_despertar);
     pause();
 
     printf("Soy Z (%d) y muero\n", getpid());
@@ -47,7 +47,7 @@ void codigo_Z(int segundos){
 
 void codigo_Y(){
     printf("Soy el proceso Y mi pid es %d. Mi padre es %d. Mi abuelo es %d. Mi bisabuelo es %d.\n", getpid(), getppid(), pid_A, pid_Padre);
-    signal(SIGUSR1, manejador_alarma);
+    signal(SIGUSR1, manejador_despertar);
     pause();
 
     printf("Soy Y (%d) y muero\n", getpid());
@@ -56,7 +56,7 @@ void codigo_Y(){
 
 void codigo_X(){
     printf("Soy el proceso X mi pid es %d. Mi padre es %d. Mi abuelo es %d. Mi bisabuelo es %d.\n", getpid(), getppid(), pid_A, pid_Padre);
-    signal(SIGUSR1, manejador_alarma);
+    signal(SIGUSR1, manejador_despertar);
     pause();
 
     printf("Soy X (%d) y muero\n", getpid());
@@ -66,8 +66,12 @@ void codigo_X(){
 void codigo_B(int segundos){
     printf("Soy el proceso B mi pid es %d. Mi padre es %d. Mi abuelo es %d.\n", getpid(), pid_A, pid_Padre);
 
+    pid_t pids_xyz[3];
+
     for(int i=0; i<3; i++){
-        switch(fork()){
+        pid_t pid_aux = fork();
+
+        switch(pid_aux){
             case -1:
                 printf("Error al crear un hijo de B.");
 
@@ -76,23 +80,34 @@ void codigo_B(int segundos){
                 if(i==0) codigo_X();
                 if(i==1) codigo_Y();
                 if(i==2) codigo_Z(segundos);
+            default:
+                pids_xyz[i] = pid_aux;
+                break;
         }
     }
+    signal(SIGUSR1, manejador_despertar);
+    pause(); // Espera la señal de A
 
-    signal(SIGUSR1, manejador_alarma);
-
+    // Propaga la señal a sus 3 hijos
+    for(int i=0; i<3; i++){
+        kill(pids_xyz[i], SIGUSR1); 
+    }
+    
+    // Espera a que los 3 hijos mueran
     for(int i=0; i<3; i++){
         wait(NULL);
     }
+    
     printf("Soy B (%d) y muero.\n", getpid());
-
     exit(0);
 }
 
 void codigo_A(int segundos){
     printf("Soy el proceso A: mi pid es %d. Mi padre es %d.\n", getpid(), pid_Padre);
 
-    switch(fork()){
+    pid_t pid_B = fork();
+
+    switch(pid_B){
         case -1:
             // ERROR
             printf("Error al crear el proceso B.\n");
@@ -104,15 +119,19 @@ void codigo_A(int segundos){
 
         default:
             // PADRE
-            signal(SIGUSR1, manejador_alarma);
+            signal(SIGUSR1, manejador_despertar);
             pause();
 
             funcion_pstree();
             wait(NULL);
 
             kill(pid_Padre, SIGUSR1); // Señal que le manda al superpadre
+            pause();
+            // Recibe del superpadre
 
+            kill(pid_B, SIGUSR1); // Manda señal a B
             wait(NULL);
+            
             printf("Soy A (%d) y muero\n", getpid());
             exit(0);
     }
@@ -139,11 +158,11 @@ int main(int argc, char *argv[]){
 
         default:
             // PADRE
-            signal(SIGUSR1, manejador_alarma);
-            pause();
+            signal(SIGUSR1, manejador_despertar);
+            pause(); 
+            // Recibe señal de despertar de A
 
-            kill(0,SIGUSR1);
-
+            kill(pid_A,SIGUSR1); // Manda señal a A
             wait(NULL);
 
             printf("Soy ejec (%d) y muero\n", getpid());
