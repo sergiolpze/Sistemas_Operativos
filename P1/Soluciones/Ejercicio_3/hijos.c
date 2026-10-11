@@ -145,7 +145,6 @@ int main(int argc, char *argv[]){
     creaComp(y); // Crea el segmento de memoria compartida y lo vincula con el proceso
 
     crearProcesos(x, y); // Crea el arbol y hace los prints
-
     printSuperPadre(y);
 
     borraComp(); // Desvincula el segmento del proceso y lo elimina
