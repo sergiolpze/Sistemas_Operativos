@@ -1,0 +1,57 @@
+const int N = 4; // Tamaño del buffer
+const int TOTAL = 20; // total de elementos a leer
+
+int buffer[N];
+int entra = 0;   // donde escribe el productor
+int sale = 0;    // de donde lee el consumidor
+
+semaphore mutex; 
+semaphore huecos;
+semaphore elementos;
+
+
+void productor(){
+    int i;
+    for(i=1; i<=TOTAL; i++){
+
+        wait(huecos); // ¿hay huecos en el buffer?
+        wait(mutex); 
+
+        buffer[entra] = i; // mete el dato
+        entra = (entra + 1) % N; // avanza en el buffer
+        cout << "Se produce " << i << endl;
+
+        signal(mutex);
+        signal(elementos); // hay elementos en el buffer
+    }
+}
+
+void consumidor(){
+    int i;
+    int elemento; // elemento que se consume
+    for(i=1; i<=TOTAL; i++){
+        
+        wait(elementos); // ¿hay elementos en el buffer?
+        wait(mutex);
+
+        elemento = buffer[sale]; // consume el dato
+        sale = (sale + 1) % N; // avanza
+        cout << "Se consume " << elemento << endl;
+
+        signal(mutex);
+        signal(huecos); // hay huecos en el buffer
+
+    }
+}
+
+void main() {
+
+    initialsem(mutex, 1);
+    initialsem(huecos, N);
+    initialsem(elementos, 0);
+
+    cobegin {
+        productor();
+        consumidor();
+    }
+}
