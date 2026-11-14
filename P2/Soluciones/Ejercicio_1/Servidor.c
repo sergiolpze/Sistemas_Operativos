@@ -7,75 +7,108 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 
-
-int main(){
+int crearSocket(){
     int descriptorServidor = socket(AF_INET,SOCK_STREAM,0);
     if(descriptorServidor == -1){
         perror("Error al crear el conector (socket)");
         exit(1);
     }
+    return descriptorServidor;
+}
 
-    int descriptorCliente;
-    struct sockaddr_in direccionServidor; // Estructura dirección del servidor
-    struct sockaddr_in direccionCliente; // Estructura dirección del cliente
-    socklen_t tamDirCliente; // Tamaño de la dirección del cliente.
+// La dirección se pasa por puntero para que los cambios lleguen al main
+void configDirServidor(struct sockaddr_in *direccionServidor){
+    direccionServidor->sin_family = AF_INET; // Familia de protocolos
+    direccionServidor->sin_addr.s_addr = htonl(INADDR_ANY); // Dirección IP a escuchar, cualquiera en este caso
+    direccionServidor->sin_port = htons(9999); // Puerto de escucha del servidor
+}
 
-    int descriptorArchivo; 
-    char buffer[1024]; // Buffer de lectura del archivo
-    int numBytesLeidos; 
-    
-
-    direccionServidor.sin_family = AF_INET; // Familia de protocolos
-    direccionServidor.sin_addr.s_addr = inet_addr("127.0.0.1"); // Dirección IP a escuchar
-    direccionServidor.sin_port = htons(9999); // Puerto de escucha del servidor
-
+void hacerBind(int descriptorServidor, struct sockaddr_in direccionServidor){
     // Asocia el conector a la dirección y puerto del servidor
     if(bind(descriptorServidor, (struct sockaddr *)&direccionServidor, sizeof(direccionServidor)) == -1){
         perror("Error al asociar el conector a la dirección del servidor (bind)");
         exit(1);
     }
+}
 
-    // Pone el conector a la espera
+void hacerListen(int descriptorServidor){
+    // Pone el conector a la espera, y se almacenan en una cola hasta 10 peticiones
     if(listen(descriptorServidor, 10) == -1){
-        perror("Error al escuchar (listen)");
+        perror("Error en el listen");
         exit(1);
     }
+}
+
+int aceptarPeticion(int descriptorServidor){
+    struct sockaddr_in direccionCliente; // Estructura dirección del cliente (la rellena accept)
+    socklen_t tamDirCliente = sizeof(direccionCliente); // Tamaño de la dirección del cliente
+
+    int descriptorCliente = accept(descriptorServidor, (struct sockaddr *)&direccionCliente, &tamDirCliente); // Descriptor del socket del cliente
+    if(descriptorCliente == -1){
+        perror("Error al aceptar la petición de un cliente");
+        exit(1);
+    }
+    return descriptorCliente;
+}
+
+int abrirArchivo(){
+    int descriptorArchivo = open("Google.html", O_RDONLY);
+    if(descriptorArchivo == -1){
+        perror("Error al abrir el archivo.");
+        exit(1);
+    }
+    return descriptorArchivo;
+}
+
+void mandarDatos(int descriptorArchivo, int descriptorCliente){
+    int numBytesLeidos;
+    char buffer[1024]; // Buffer de lectura del archivo
+
+    while((numBytesLeidos = read(descriptorArchivo, buffer,sizeof(buffer)))>0){ // Lee hasta el final del archivo
+        write(descriptorCliente, buffer, numBytesLeidos); // y lo manda al cliente.
+    }
+}
+
+void codigoHijo(int descriptorServidor, int descriptorCliente){
+    close(descriptorServidor); // El hijo no necesita el conector de escucha
+
+    int descriptorArchivo = abrirArchivo();
+
+    mandarDatos(descriptorArchivo, descriptorCliente);
+
+    close(descriptorArchivo);
+    close(descriptorCliente);
+
+    exit(0);
+}
+
+int main(){
+
+    int descriptorServidor = crearSocket();
+
+    struct sockaddr_in direccionServidor; // Estructura dirección del servidor
+
+    configDirServidor(&direccionServidor);
+
+    hacerBind(descriptorServidor, direccionServidor);
+    hacerListen(descriptorServidor);
 
     while(1){
-
-        tamDirCliente = sizeof(direccionCliente);
-
-        descriptorCliente = accept(descriptorServidor, (struct sockaddr *)&direccionCliente, &tamDirCliente); // Descriptor del socket del cliente
-        if(descriptorCliente == -1){
-            perror("Error al aceptar la petición de un cliente");
-            exit(1);
-        }
+        int descriptorCliente = aceptarPeticion(descriptorServidor);
 
         switch(fork()){
             case -1:
                 perror("Error al crear el proceso hijo");
+                close(descriptorCliente);
                 exit(1);
 
             case 0:     // HIJO
-                descriptorArchivo = open("Google.html", O_RDONLY);
-                if(descriptorArchivo == -1){
-                    perror("Error al abrir el archivo.");
-                    exit(1);
-                }
-                while(numBytesLeidos = read(descriptorArchivo, buffer,sizeof(buffer))){ // Lee hasta el final del archivo
-                    write(descriptorCliente, buffer, numBytesLeidos); // y lo manda al cliente.
-                }
-
-                close(descriptorArchivo);
-                close(descriptorCliente);
-                
-                exit(0);
+                codigoHijo(descriptorServidor, descriptorCliente); // No vuelve: termina con exit(0)
+                break;
 
             default:    // PADRE
                 close(descriptorCliente);
                 break;
-
         }
     }
-
 }
