@@ -1,0 +1,75 @@
+#include "gdefs.cm"
+
+const int N = 4;  // Tamano del buffer
+const int TOTAL = 8;  // Total de elementos a producir y consumir
+
+// Handles de las figuras: cajas 1..4, datos 5..8, productor 9, consumidor 10
+// (si cambias N, cambia tambien PROD = 2*N+1 y CONS = 2*N+2)
+const int PROD = 9;
+const int CONS = 10;
+
+int buffer[N];
+int entra = 0;  // donde escribe el productor
+int sale = 0;   // de donde lee el consumidor
+
+semaphore mutex;
+semaphore huecos;
+semaphore elementos;
+
+void productor(){
+    int i;
+    for(i=1; i<=TOTAL; i++){
+
+        wait(huecos);  // hay huecos en el buffer?
+        wait(mutex);
+
+        buffer[entra] = i;  // mete el dato
+        moveto(PROD, 140 + entra * 90, 100);  // el productor se coloca sobre la caja
+        makevisible(N + entra + 1, 1);  // aparece el dato en la caja
+        entra = (entra + 1) % N;  // avanza en el buffer
+        cout << "Se produce " << i << endl;
+
+        signal(mutex);
+        signal(elementos);  // hay un elemento mas en el buffer
+    }
+}
+
+void consumidor(){
+    int i;
+    int elemento;
+    for(i=1; i<=TOTAL; i++){
+
+        wait(elementos);  // hay elementos en el buffer?
+        wait(mutex);
+
+        elemento = buffer[sale];  // consume el dato
+        moveto(CONS, 140 + sale * 90, 290);  // el consumidor se coloca bajo la caja
+        makevisible(N + sale + 1, 0);  // el dato desaparece de la caja
+        sale = (sale + 1) % N;  // avanza
+        cout << "Se consume " << elemento << endl;
+
+        signal(mutex);
+        signal(huecos);  // hay un hueco mas en el buffer
+    }
+}
+
+void main() {
+    int k;
+
+    for(k = 0; k < N; k++){
+        create(k + 1, RECTANGLE, BLACK, 130 + k * 90, 190, 60, 60);  // caja
+        create(N + k + 1, RECTANGLE, GREEN, 145 + k * 90, 205, 30, 30);  // dato
+        makevisible(N + k + 1, 0);  // empieza vacia
+    }
+    create(PROD, CIRCLE, RED, 40, 100, 40, 40);  // productor
+    create(CONS, CIRCLE, BLUE, 520, 290, 40, 40);  // consumidor
+
+    initialsem(mutex, 1);
+    initialsem(huecos, N);
+    initialsem(elementos, 0);
+
+    cobegin {
+        productor();
+        consumidor();
+    }
+}
