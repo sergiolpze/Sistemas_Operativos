@@ -20,6 +20,7 @@ int crearSocket(){
         perror("Error al crear el conector (socket)");
         exit(1);
     }
+    printf("Socket creado.\n");
     return descriptorCliente;
 }
 
@@ -36,19 +37,22 @@ void hacerConnect(int descriptorCliente, struct sockaddr_in direccionServidor){
         perror("Error al conectar con el servidor (connect)");
         exit(1);
     }
+    printf("Socket conectado al servidor con éxito.\n");
 }
 
 void recibirDatos(int descriptorCliente){
     char buffer[1024]; // Buffer de lectura de los datos recibidos
     int numBytesLeidos;
 
+    printf("Recibiendo datos...\n");
     // Lee hasta que se cierra la conexión por parte del servidor
     while((numBytesLeidos = read(descriptorCliente, buffer,sizeof(buffer)))>0){
         write(1, buffer, numBytesLeidos); // y lo saca por pantalla.
     }
-
     if(numBytesLeidos == -1){
         perror("Error al leer del servidor (read)");
+    }else{
+        printf("Datos recibidos con éxito.\n");
     }
 }
 
